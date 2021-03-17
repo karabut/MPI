@@ -64,30 +64,25 @@ matrixSize, int procRank, int procSize) {
     }
 }
 
-void nextX(float *x, const float *b, float *Ax, int matrixSize, int
-procRank, int procSize) {
+void nextX(float *x, const float *b, float *Ax, int matrixSize, int procRank, int procSize) {
 //Ax - b уже после проверки (... < EPS) - используем его
 //vectorSub(Ax, b, Ax, 1, matrixSize, procRank, procSize);
     vectorSub(x, Ax, x, TAU, matrixSize, procRank, procSize);
 }
 
-bool ending(float *x, float *partA, float *b, float *Ax, int matrixSize,
-            int procRank, int procSize) {
+bool ending(float *x, float *partA, float *b, float *Ax, int matrixSize, int procRank, int procSize) {
     mul(partA, x, Ax, matrixSize, procRank, procSize); // частичная Ax
     vectorSub(Ax, b, Ax, 1, matrixSize, procRank, procSize); // частичная Ax-b
     float *tempBuf = new float[matrixSize];
-    MPI_Allreduce(Ax, tempBuf, matrixSize, MPI_FLOAT,
-                  MPI_SUM, MPI_COMM_WORLD); // Собираем Ax - b
+    MPI_Allreduce(Ax, tempBuf, matrixSize, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD); // Собираем Ax - b
     copyFirstVectorToSecond(tempBuf, Ax, matrixSize);
     float absOfAxb;
     if (procRank == 0) {
         absOfAxb = vectorFullAbs(tempBuf, matrixSize); // считаем ||Ax - b|| ^ 2
     }
-    float partialAbs = vectorAbs(b, matrixSize, procRank, procSize);
-// считаем bk^2 + .. + bm^2
+    float partialAbs = vectorAbs(b, matrixSize, procRank, procSize); // считаем bk^2 + .. + bm^2
     float div;
-    MPI_Reduce(&partialAbs, &div, 1, MPI_FLOAT, MPI_SUM, 0,
-               MPI_COMM_WORLD); // собираем ||b|| ^ 2
+    MPI_Reduce(&partialAbs, &div, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD); // собираем ||b|| ^ 2
     if (procRank == 0) {
         div = absOfAxb / div;
     }
@@ -108,13 +103,13 @@ bool ending(float *x, float *partA, float *b, float *Ax, int matrixSize,
     return res;
 }
 
-void init_1(float *&x, float *&partA, float *&b, float *&Ax, int
-matrixSize, int procRank, int procSize) {
+void init_1(float *&x, float *&partA, float *&b, float *&Ax, int matrixSize, int procRank, int procSize) {
     int startLine; //номер строки с которой процесс считает матрицу A
     int numberOfLines; //количествно строк которые обрабатывает каждый процесс
-    numberOfLines = matrixSize / procSize;
-    startLine = (procRank) * (numberOfLines);
-    partA = new float[matrixSize * numberOfLines];
+    numberOfLines = matrixSize / procSize; //размер матрицы делить на количество выполняемых процессов => нужное количсетво строк
+    startLine = (procRank) * (numberOfLines); //смотрим где начало 
+    partA = new float[matrixSize * numberOfLines]; //часть матрицы коэффицентов для каждого процесса она своя
+    //задаем значение матрицы
     for (int i = 0; i < matrixSize; i++) {
         for (int j = 0; j < numberOfLines; j++) {
             partA[i * numberOfLines + j] = 1.0f;
@@ -123,6 +118,7 @@ matrixSize, int procRank, int procSize) {
             }
         }
     }
+    //задаем значение вектора b
     b = new float[matrixSize];
     for (int i = 0; i < matrixSize; ++i) {
         b[i] = 0.0f;
@@ -137,6 +133,7 @@ matrixSize, int procRank, int procSize) {
             x[i] = START_X;
         }
     }
+    
     Ax = new float[matrixSize];
 }
 
@@ -157,8 +154,10 @@ int main(int argc, char *argv[]) {
     int procSize; //количество выполняемых процессов
     int procRank; //номер текущего процесса(нумерация с нуля)
 
-    MPI_Comm_size(MPI_COMM_WORLD, &procSize);
+    MPI_Comm_size(MPI_COMM_WORLD, &procSize); 
     MPI_Comm_rank(MPI_COMM_WORLD, &procRank);
+    
+    //создаем матрицы и векторы
     init_1(x, partA, b, Ax, size, procRank, procSize);
     
     double startTime, endTime;
